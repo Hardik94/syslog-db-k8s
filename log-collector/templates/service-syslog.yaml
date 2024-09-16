@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "log-collector.fullname" . }}-syslog
+  labels:
+    {{- include "log-collector.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: 6601
+      targetPort: 6601
+      protocol: TCP
+      name: t1
+    - port: 5514
+      targetPort: 5514
+      protocol: UDP
+      name: t2
+  selector:
+    {{- include "log-collector.selectorLabels" . | nindent 4 }}
