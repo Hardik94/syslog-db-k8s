@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "log-collector.fullname" . }}-syslog
+  labels:
+    {{- include "log-collector.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.syslog.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "log-collector.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+      labels:
+        {{- include "text2sql-editor.labels" . | nindent 8 }}
+	{{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "log-collector.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.syslog.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: init-copy-config
+          image: busybox
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'cp /configmap/syslog-ng.conf /etc/syslog-ng/syslog-ng.conf', '&&', 
+                    '/sbin/sysctl -w net.core.rmem_max=16777216',
+                    '/sbin/sysctl -w net.core.wmem_max=16777216',
+                    ]
+          # securityContext:
+          #   runAsUser: 0  # Ensure the init container runs as root
+          volumeMounts:
+            - name: config-volume
+              mountPath: /configmap
+            - name: writable-config
+              mountPath: /etc/syslog-ng
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.syslog.securityContext | nindent 12 }}
+          image: "{{ .Values.syslog.repository }}:{{ .Values.syslog.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.syslog.pullPolicy }}
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+          ports:
+            - name: t1
+              containerPort: 6601
+              protocol: TCP
+            - name: t2
+              containerPort: 5514
+              protocol: UDP
+          resources:
+            requests:
+              memory: "1024Mi"
+              cpu: "1000m"
+            limits:
+              memory: "14000Mi"
+              cpu: "3500m"
+          volumeMounts:
+            - name: config-volume
+              mountPath: /configmap
+            - name: writable-config
+              mountPath: /etc/syslog-ng
+      volumes:
+        - name: config-volume
+          configMap:
+            name: log-collector-config
+        - name: writable-config
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
