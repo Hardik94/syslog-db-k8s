@@ -10,6 +10,6 @@ helm repo add syslog-db-k8s https://vistrix.in/syslog-db-k8s/
 `
 
 `
-helm install logger syslog-db-k8s/log-collector
+helm install logger syslog-db-k8s/log-collector --version 0.2.1
 `
 
