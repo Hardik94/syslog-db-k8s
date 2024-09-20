@@ -13,3 +13,12 @@ helm repo add syslog-db-k8s https://vistrix.in/syslog-db-k8s/
 helm install logger syslog-db-k8s/log-collector --version 0.2.1
 `
 
+Sample command to send logs to Server
+`
+echo "Hardik" | nc 127.0.0.1 6601
+`
+
+Sample command to send traffic in bulk
+`
+loggen -S --size 300 --rate 4000 --interval 30 127.0.0.1 6601
+`
