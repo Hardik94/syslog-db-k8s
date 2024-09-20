@@ -18,7 +18,7 @@ helm install logger syslog-db-k8s/log-collector --version 0.2.1
 command to send logs to Server
 
 `
-echo "Hardik" | nc 127.0.0.1 6601
+echo "YouAreMethos" | nc 127.0.0.1 6601
 `
 
 command to send traffic in bulk
