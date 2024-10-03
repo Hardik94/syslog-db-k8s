@@ -2,6 +2,109 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+configOverrides:
+  syslog_ng: |
+    @version: 4.8
+    @include "scl.conf"
+
+    # Syslog-ng configuration file, compatible with default Debian syslogd
+    # installation.
+
+    # First, set some global options.
+    options { 
+      chain_hostnames(off); 
+      flush_lines(0); 
+      use_dns(no); 
+      use_fqdn(no);
+      dns_cache(no); 
+      owner("root"); 
+      group("adm");
+      perm(0640);
+      stats(freq(0)); 
+      bad_hostname("^gconfd$"); 
+      log-level(debug);
+    };
+
+    ########################
+    # Sources
+    ########################
+    # This is the default behavior of syslogd package
+    # Logs may come from unix stream, but not from another machine.
+    #
+    source s_src {
+          system();
+          internal();
+    };
+
+    filter f_error_logs {
+        level(error..emerg);
+    };
+
+    # If you wish to get logs from remote machine you should uncomment
+    # this and comment the above source line.
+    #
+    source s_tcp {
+        tcp(ip("0.0.0.0") port(6601)
+        log-iw-size(20000)
+        );
+    };
+    ########################
+    # Destinations
+    ########################
+    # First some standard logfile
+    #
+    # Format logs as JSON
+    template t_json {
+        template(ch_format);
+    };
+    parser p_extract_date {
+        csv-parser(
+            columns("EXTRACTED_DATE", "HOSTNAME", "APP_NAME", "JUNK_1", "JUNK_2", "JUNK_3", "MESSAGE")
+            delimiters(" ")
+            quote-pairs('""[]')
+        );
+    };
+    # Replace double quotes with single quotes in the message
+    rewrite r_replace_quotes {
+        subst("\"", "'", value("MESSAGE") flags("global"));
+    };
+    
+
+    destination d_http {
+        http(
+            url("http://D_CH_HOST:D_CH_PORT/?query=INSERT%20INTO%20basic_logger%20FORMAT%20JSONEachRow")
+            method("POST")
+            headers("Content-Type: application/json")
+            body(ch_format)
+            batch_lines(1000)
+            batch_timeout(60)
+            persist_name("clickhouse-dest")
+            retries(2)
+        );
+    };
+
+    destination d_messages { file("/var/log/syslog-ng-fallback.log"); };
+    destination d_logs { file("/var/log/messages"); };
+
+
+    log {
+        source(s_tcp);
+        parser(p_extract_date);
+        rewrite(r_replace_quotes);  # Replace double quotes with single quotes
+        destination(d_http);
+        destination(d_meesages);
+    };
+
+    log {
+        source(s_src);
+        filter(f_error_logs);
+        destination(d_logs);
+    };
+
+  
+  base_query: |
+    CREATE TABLE basic_logger (created_at String, severity String, facility String, hostname String, host String, application String, message String) ENGINE = MergeTree() ORDER BY created_at;
+
 replicaCount: 1
 
 syslog:
@@ -20,6 +123,19 @@ syslog:
   
   securityContext: 
     runAsUser: 0
+  
+  connections:
+    tcp_port: 6601
+    udp_port: 5514
+  
+  resources:
+    requests:
+      memory: "1024Mi"
+      cpu: "1000m"
+    limits:
+      memory: "14000Mi"
+      cpu: "3500m"
+
 
 clickhouse:
   repository: clickhouse/clickhouse-server
@@ -33,35 +149,34 @@ clickhouse:
     runAsNonRoot: true
     runAsUser: 101
 
+  connections:
+    ch_http_port: 8123
+    ch_native_port: 9000
+    ch_host: '{{ .Release.Name }}-ch'
+    ch_format: '"{\"created_at\":\"${EXTRACTED_DATE}\", \"severity\":\"${PRIORITY}\", \"facility\":\"${FACILITY}\", \"hostname\":\"${HOSTNAME}\", \"host\":\"${HOST}\",\"application\":\"${APP_NAME}\", \"message\":\"${MESSAGE}\"}\n"'
+
+  # volumeMounts: 
+    # name: clickhouse-data
+    # mountPath: /var/lib/clickhouse/
+  size: 10Gi
+
+  resources:
+    requests:
+      memory: "1024Mi"
+      cpu: "1000m"
+    limits:
+      memory: "14000Mi"
+      cpu: "3500m"
 
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
-
-serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Automatically mount a ServiceAccount's API credentials?
-  automount: true
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
-  name: ""
 
 podAnnotations: {}
 podLabels: {}
 
 podSecurityContext: {}
 fsGroup: 2000
-
-# securityContext: 
-#   runAsNonRoot: true
-#   runAsUser: 101
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
 
 service:
   type: ClusterIP
@@ -83,45 +198,26 @@ ingress:
   #    hosts:
   #      - chart-example.local
 
-resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
-
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
-
-# Additional volumes on the output Deployment definition.
-volumes: []
-  # - name: clickhouse-data
-  #   persistentVolumeClaim:
-  #     claimName: '{{ include "text2sql-editor.fullname" . }}-pvc'
-# - name: foo
-#   secret:
-#     secretName: mysecret
-#     optional: false
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Automatically mount a ServiceAccount's API credentials?
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
 
 # Additional volumeMounts on the output Deployment definition.
-volumeMounts: []
-  # - name: clickhouse-data
-  #   mountPath: /var/lib/clickhouse/
-# - name: foo
-#   mountPath: "/etc/foo"
-#   readOnly: true
+# volumeMounts: 
+#   - name: clickhouse-data
+#     mountPath: /var/lib/clickhouse/
+
 
 nodeSelector: {}
 
 tolerations: []
 
 affinity: {}
+
