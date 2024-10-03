@@ -39,7 +39,7 @@ Add Sidecar container in your existing pods with below config. Change environmen
 > SOURCE_PATH - logs file path
 Change the mountPath based on 
 
-`
+```
 containers:
   - image: hardikdev/syslog-ng:1.3-agent
     imagePullPolicy: Always
@@ -65,4 +65,4 @@ containers:
 volumes:
   - name: logs-reader
   emptyDir: {}
-`
+```
