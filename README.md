@@ -33,13 +33,13 @@ loggen -S --size 300 --rate 4000 --interval 30 127.0.0.1 6601
 
 
 Add Sidecar container in your existing pods with below config. Change environment variable of destination. 
-> SYSLOG_SERVER_HOST - IP of Syslog server
+> `SYSLOG_SERVER_HOST` - IP of Syslog server
 
-> SYSLOG_SERVER_PORT - Port of syslog server
+> `SYSLOG_SERVER_PORT` - Port of syslog server
 
-> APP_NAME - Provide the unique application name for the filter
+> `APP_NAME` - Provide the unique application name for the filter
 
-> SOURCE_PATH - logs file path
+> `SOURCE_PATH` - logs file path
 
 Change the mountPath based on 
 
