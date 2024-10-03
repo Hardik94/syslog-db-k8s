@@ -46,7 +46,7 @@ Change the mountPath based on
 ```
 containers:
   - image: hardikdev/syslog-ng:1.3-agent
-    imagePullPolicy: Always
+    imagePullPolicy: IfNotPresent
     name: "log-forwarder"
     securityContext:
       runAsUser: 0
