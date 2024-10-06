@@ -41,7 +41,7 @@ Add Sidecar container in your existing pods with below config. Change environmen
 
 > `SOURCE_PATH` - logs file path
 
-Change the mountPath based on 
+Change the mountPath based on Log location of your main application
 
 ```
 containers:
