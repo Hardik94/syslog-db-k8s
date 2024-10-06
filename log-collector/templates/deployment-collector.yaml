@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "log-collector.fullname" . }}-collector
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "log-collector.labels" . | nindent 4 }}
+    app: {{ include "log-collector.fullname" . }}-collector
+spec:
+  {{- if not .Values.collector.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "log-collector.selectorLabels" . | nindent 6 }}
+      app: {{ include "log-collector.fullname" . }}-collector
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+      labels:
+        {{- include "log-collector.labels" . | nindent 8 }}
+        app: {{ include "log-collector.fullname" . }}-collector
+	{{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "log-collector.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.collector.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: init-copy-config
+          image: busybox
+          imagePullPolicy: IfNotPresent
+          command: ['sh', '-c', 'cat /configmap/syslog-ng.conf | sed "s/D_HOST/$D_HOST/g" | sed "s/D_PORT/$D_PORT/g" >> /etc/syslog-ng/syslog-ng.conf']
+          env:
+            - name: D_PORT
+              value: {{ .Values.storage.connections.http_port | quote }}
+            - name: D_HOST
+              value: {{ include "log-collector.fullname" . }}-storage
+          # securityContext:
+          #   runAsUser: 0  # Ensure the init container runs as root
+          volumeMounts:
+            - name: config-volume
+              mountPath: /configmap
+            - name: writable-config
+              mountPath: /etc/syslog-ng
+        - name: wait-for-clickhouse
+          image: busybox
+          command:  ["sh", "-c", "until nc -z $D_HOST $D_PORT > /dev/null; do echo Waiting for Clickhouse.; sleep 2; done;"]
+          env:
+            - name: D_PORT
+              value: {{ .Values.storage.connections.http_port | quote }}
+            - name: D_HOST
+              value: {{ include "log-collector.fullname" . }}-storage
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.collector.securityContext | nindent 12 }}
+          image: "{{ .Values.collector.repository }}:{{ .Values.collector.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.collector.pullPolicy }}
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: D_PORT
+              value: {{ .Values.storage.connections.http_port | quote }}
+            - name: D_HOST
+              value: {{ include "log-collector.fullname" . }}-storage
+          ports:
+            - name: tcpt
+              containerPort: {{ .Values.collector.connections.tcp_port | int }}
+              protocol: TCP
+            - name: udpt
+              containerPort: {{ .Values.collector.connections.udp_port | int }}
+              protocol: UDP
+          {{- with .Values.collector.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: /configmap
+            - name: writable-config
+              mountPath: /etc/syslog-ng
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ include "log-collector.fullname" . }}-config
+        - name: writable-config
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
