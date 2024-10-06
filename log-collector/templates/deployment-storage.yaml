@@ -1,16 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "log-collector.fullname" . }}-ch
+  name: {{ include "log-collector.fullname" . }}-storage
   labels:
     {{- include "log-collector.labels" . | nindent 4 }}
+    app: {{ include "log-collector.fullname" . }}-storage
 spec:
-  {{- if not .Values.clickhouse.autoscaling.enabled }}
+  {{- if not .Values.storage.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
       {{- include "log-collector.selectorLabels" . | nindent 6 }}
+      app: {{ include "log-collector.fullname" . }}-storage
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -19,6 +21,7 @@ spec:
       {{- end }}
       labels:
         {{- include "log-collector.labels" . | nindent 8 }}
+        app: {{ include "log-collector.fullname" . }}-storage
 	{{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -33,15 +36,15 @@ spec:
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
-            {{- toYaml .Values.clickhouse.securityContext | nindent 12 }}
-          image: "{{ .Values.clickhouse.repository }}:{{ .Values.clickhouse.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.clickhouse.pullPolicy }}
+            {{- toYaml .Values.storage.securityContext | nindent 12 }}
+          image: "{{ .Values.storage.repository }}:{{ .Values.storage.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.storage.pullPolicy }}
           ports:
             - name: http
-              containerPort: 8123
+              containerPort: {{ .Values.storage.connections.http_port | int }}
               protocol: TCP
             - name: native
-              containerPort: 9000
+              containerPort: {{ .Values.storage.connections.native_port | int }}
               protocol: TCP
           livenessProbe:
             httpGet:
@@ -59,17 +62,21 @@ spec:
             periodSeconds: 5
             failureThreshold: 3
             timeoutSeconds: 5
+          {{- with .Values.storage.resources }}
           resources:
-            requests:
-              memory: "1024Mi"
-              cpu: "1000m"
-            limits:
-              memory: "14000Mi"
-              cpu: "3500m"
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: /configmap
           lifecycle:
             postStart:
               exec:
-                command: ["/bin/sh", "-c", "sleep 2; clickhouse-client --database default --query 'CREATE TABLE basic_logger (created_at String, host String, message String) ENGINE = MergeTree() ORDER BY created_at;'"]
+                command: ["/bin/sh", "-c", "sleep 2; clickhouse-client --queries-file /configmap/base_tbl.sql"]
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ include "log-collector.fullname" . }}-config
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
