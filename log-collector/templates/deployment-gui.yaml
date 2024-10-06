@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "log-collector.fullname" . }}-gui
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "log-collector.labels" . | nindent 4 }}
+    app: {{ include "log-collector.fullname" . }}-gui
+spec:
+  {{- if not .Values.gui.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "log-collector.selectorLabels" . | nindent 6 }}
+      app: {{ include "log-collector.fullname" . }}-gui
+  template:
+    metadata:
+      labels:
+        {{- include "log-collector.labels" . | nindent 8 }}
+        app: {{ include "log-collector.fullname" . }}-gui
+	{{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "log-collector.serviceAccountName" . }}
+      securityContext: {}
+      initContainers:
+        - name: wait-for-clickhouse
+          image: busybox
+          command:  ["sh", "-c", "until nc -z $D_HOST $D_PORT > /dev/null; do echo Waiting for Clickhouse.; sleep 2; done;"]
+          env:
+            - name: D_PORT
+              value: {{ .Values.storage.connections.native_port | quote }}
+            - name: D_HOST
+              value: {{ include "log-collector.fullname" . }}-storage
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.gui.repository }}:{{ .Values.gui.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.gui.pullPolicy }}
+          env:
+            - name: CH_USER
+              value: "default"
+            - name: CH_PASSWD
+              value: ""
+            - name: CH_PORT
+              value: {{ .Values.storage.connections.native_port | quote }}
+            - name: CH_HOST
+              value: {{ include "log-collector.fullname" . }}-storage
+            - name: ENVIRONMENT
+              value: "Production"
+          ports:
+            - name: gui-http
+              containerPort: 8000
+              protocol: TCP
+          {{- with .Values.gui.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: /configmap
+            - name: writable-config
+              mountPath: /etc/syslog-ng
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ include "log-collector.fullname" . }}-config
+        - name: writable-config
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
