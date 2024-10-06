@@ -1,71 +1,9 @@
+{{- $syslogNg := .Values.configOverrides.syslog_ng | replace "format" .Values.storage.connections.format -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: log-collector-config
+  name: {{ include "log-collector.fullname" . }}-config
 data:
-  syslog-ng.conf: |
-    @version: 4.8
-    @include "scl.conf"
+  syslog-ng.conf: {{ $syslogNg | quote }}
+  base_tbl.sql: {{ .Values.configOverrides.base_query | quote }}
 
-    # Syslog-ng configuration file, compatible with default Debian syslogd
-    # installation.
-
-    # First, set some global options.
-    options { chain_hostnames(off); flush_lines(0); use_dns(no); use_fqdn(no);
-        dns_cache(no); owner("root"); group("adm"); perm(0640);
-        stats(freq(0)); bad_hostname("^gconfd$"); log-level(debug);
-    };
-
-    ########################
-    # Sources
-    ########################
-    # This is the default behavior of sysklogd package
-    # Logs may come from unix stream, but not from another machine.
-    #
-    source s_src {
-          system();
-          internal();
-    };
-
-    # If you wish to get logs from remote machine you should uncomment
-    # this and comment the above source line.
-    #
-    #source s_net { tcp(ip(127.0.0.1) port(1000)); };
-    #source s_network_tcp {
-    #  syslog(transport(tcp) port(6601));
-    #};
-    source s_tcp {
-        tcp(port(6601));
-    };
-    ########################
-    # Destinations
-    ########################
-    # First some standard logfile
-    #
-    # Format logs as JSON
-    template t_json {
-        template("{\"created_at\":\"${ISODATE}\", \"host\":\"${HOST}\", \"message\":\"${MSG}\"}\n");
-    };
-
-    destination d_http {
-        http(
-            url("http://10.148.9.11:8123/?query=INSERT%20INTO%20basic_logger%20FORMAT%20JSONEachRow")
-            method("POST")
-            headers("Content-Type: application/json")
-            body("{\"created_at\":\"${ISODATE}\", \"host\":\"${HOST}\", \"message\":\"${MESSAGE}\"}\n")
-            batch_lines(100)
-            batch_timeout(60)
-            persist_name("clickhouse-dest")
-            retries(2)
-        );
-    };
-
-    destination d_messages { file("/var/log/syslog-ng-fallback.log" template(t_json)); };
-
-    log {
-        source(s_tcp);
-        destination(d_http);
-        destination(d_messages);
-    };
-  base_tbl.sql: |
-    CREATE TABLE basic_logger (created_at String, host String, message String) ENGINE = MergeTree() ORDER BY created_at;
