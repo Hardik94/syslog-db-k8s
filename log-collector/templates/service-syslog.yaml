@@ -1,19 +1,22 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "log-collector.fullname" . }}-syslog
+  name: {{ include "log-collector.fullname" . }}-collector
   labels:
     {{- include "log-collector.labels" . | nindent 4 }}
+    app: {{ include "log-collector.fullname" . }}-collector
 spec:
-  type: {{ .Values.service.type }}
+  type: ClusterIP
   ports:
-    - port: 6601
-      targetPort: 6601
+    - port: {{ .Values.collector.connections.tcp_port | int }}
+      targetPort: {{ .Values.collector.connections.tcp_port | int }}
       protocol: TCP
-      name: t1
-    - port: 5514
-      targetPort: 5514
+      name: tcpt
+    - port: {{ .Values.collector.connections.udp_port | int }}
+      targetPort: {{ .Values.collector.connections.udp_port | int }}
       protocol: UDP
-      name: t2
+      name: udpt
   selector:
     {{- include "log-collector.selectorLabels" . | nindent 4 }}
+    app: {{ include "log-collector.fullname" . }}-collector
+
