@@ -55,7 +55,7 @@ configOverrides:
     #
     # Format logs as JSON
     template t_json {
-        template(ch_format);
+        template(format);
     };
     parser p_extract_date {
         csv-parser(
@@ -72,10 +72,10 @@ configOverrides:
 
     destination d_http {
         http(
-            url("http://D_CH_HOST:D_CH_PORT/?query=INSERT%20INTO%20basic_logger%20FORMAT%20JSONEachRow")
+            url("http://D_HOST:D_PORT/?query=INSERT%20INTO%20basic_logger%20FORMAT%20JSONEachRow")
             method("POST")
             headers("Content-Type: application/json")
-            body(ch_format)
+            body(format)
             batch_lines(1000)
             batch_timeout(60)
             persist_name("clickhouse-dest")
@@ -92,7 +92,7 @@ configOverrides:
         parser(p_extract_date);
         rewrite(r_replace_quotes);  # Replace double quotes with single quotes
         destination(d_http);
-        destination(d_meesages);
+        destination(d_messages);
     };
 
     log {
@@ -107,7 +107,7 @@ configOverrides:
 
 replicaCount: 1
 
-syslog:
+collector:
   repository: hardikdev/syslog-ng
   tag: "1.0"
   pullPolicy: IfNotPresent
@@ -137,7 +137,7 @@ syslog:
       cpu: "3500m"
 
 
-clickhouse:
+storage:
   repository: clickhouse/clickhouse-server
   tag: 24.7
   pullPolicy: IfNotPresent
@@ -150,10 +150,10 @@ clickhouse:
     runAsUser: 101
 
   connections:
-    ch_http_port: 8123
-    ch_native_port: 9000
-    ch_host: '{{ .Release.Name }}-ch'
-    ch_format: '"{\"created_at\":\"${EXTRACTED_DATE}\", \"severity\":\"${PRIORITY}\", \"facility\":\"${FACILITY}\", \"hostname\":\"${HOSTNAME}\", \"host\":\"${HOST}\",\"application\":\"${APP_NAME}\", \"message\":\"${MESSAGE}\"}\n"'
+    http_port: 8123
+    native_port: 9000
+    host: '{{ .Release.Name }}-ch'
+    format: '"{\"created_at\":\"${EXTRACTED_DATE}\", \"severity\":\"${PRIORITY}\", \"facility\":\"${FACILITY}\", \"hostname\":\"${HOSTNAME}\", \"host\":\"${HOST}\",\"application\":\"${APP_NAME}\", \"message\":\"${MESSAGE}\"}\n"'
 
   # volumeMounts: 
     # name: clickhouse-data
@@ -167,6 +167,20 @@ clickhouse:
     limits:
       memory: "14000Mi"
       cpu: "3500m"
+
+gui:
+  repository: hardikdev/syslog-ng
+  tag: "1.1-api"
+  pullPolicy: Always
+
+  connections:
+    port: 8000
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
 
 imagePullSecrets: []
 nameOverride: ""
@@ -220,4 +234,3 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
-
