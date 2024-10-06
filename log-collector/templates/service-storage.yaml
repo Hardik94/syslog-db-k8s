@@ -1,19 +1,21 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "log-collector.fullname" . }}-ch
+  name: {{ include "log-collector.fullname" . }}-storage
   labels:
     {{- include "log-collector.labels" . | nindent 4 }}
+    app: {{ include "log-collector.fullname" . }}-storage
 spec:
-  type: {{ .Values.service.type }}
+  type: ClusterIP
   ports:
-    - port: 8123
+    - port: {{ .Values.storage.connections.http_port | int }}
       targetPort: http
       protocol: TCP
       name: http
-    - port: 9000
+    - port: {{ .Values.storage.connections.native_port | int }}
       targetPort: native
       protocol: TCP
       name: native
   selector:
     {{- include "log-collector.selectorLabels" . | nindent 4 }}
+    app: {{ include "log-collector.fullname" . }}-storage
