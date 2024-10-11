@@ -55,14 +55,14 @@ containers:
         value: "1000"
       - name: PGID
         value: "1000"
-      - name: SYSLOG_SERVER_HOST
-        value: '10.148.3.204'
+      - name: SYSLOG_SERVER_HOST:
+        value: '10.148.3.204'       # changeMe
       - name: SYSLOG_SERVER_PORT
-        value: "6601"
+        value: "6601"               # changeMe
       - name: SOURCE_PATH
-        value: "/var/log/messages"
+        value: "/var/log/messages"  # changeMe
       - name: APP_NAME
-        value: "DUMMy"
+        value: "DUMMy"              # changeMe
     volumeMounts:
       - name: logs-reader
         mountPath: /var/log/
@@ -70,3 +70,5 @@ volumes:
   - name: logs-reader
   emptyDir: {}
 ```
+
+
