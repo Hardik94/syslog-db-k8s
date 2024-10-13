@@ -1,5 +1,7 @@
 ## syslog-db-k8s
 
+**Note** This is open source application. authentication mechanism is not configured yet. Deploy it on public IP, at your risk.
+
 A Log Collector Automation tool to collect, store and retrieve logs on real time. For collecting logs used `syslog-ng`. For storing and retrieval part, we integrated `clickhouse` db
 A helm template is supported to scale the number of workers based on work load.
 
